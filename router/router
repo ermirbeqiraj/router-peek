@@ -1,0 +1,67 @@
+#!/usr/bin/env python3
+"""router <command> - read-only queries against the home router. JSON on stdout, always."""
+import json
+import sys
+
+sys.dont_write_bytecode = True  # keep the checkout free of __pycache__
+
+from commands import COMMANDS  # noqa: E402
+from core.client import RouterError, session  # noqa: E402
+from core.jsparse import FormatError  # noqa: E402
+
+EXIT_CODES = {
+    0: "ok: stdout holds the data",
+    1: "usage: unknown command",
+    2: "busy: login refused without a failure counted; skip this cycle",
+    3: "rejected: wrong credentials; alert",
+    4: "blocked: router lockout, or a previous rejection is latched in .state/auth-failed; alert",
+    5: "failure: router unreachable or unexpected response; alert",
+    6: "format: a page no longer has the expected shape (firmware change?); alert",
+}
+
+
+def help_doc():
+    return {
+        "usage": "router <command>",
+        "output": "JSON on stdout. Errors are {\"error\": <kind>, \"message\": ...} with a non-zero exit.",
+        "commands": dict({name: mod.__doc__.strip().splitlines()[0]
+                          for name, mod in COMMANDS.items()},
+                         help="This document. No router login."),
+        "exit_codes": {str(k): v for k, v in EXIT_CODES.items()},
+        "rules": [
+            "Read-only: commands only GET pages; the only POSTs are the auth calls (token, login, logout).",
+            "Each run logs in, reads, logs out. It kicks any open web-UI admin session.",
+            "Credential fields (passwords, PSKs, usernames) are never output.",
+            "Strict parsing: a page shape change exits 6 instead of returning partial data.",
+            "Field names are the router's own (TR-098 style); values are strings as the router sends them.",
+        ],
+    }
+
+
+def emit(obj):
+    sys.stdout.write(json.dumps(obj, indent=2, ensure_ascii=False) + "\n")
+
+
+def main(argv):
+    if argv == ["help"]:
+        emit(help_doc())
+        return 0
+    if len(argv) != 1 or argv[0] not in COMMANDS:
+        emit({"error": "usage", "message": "router <%s>; see `router help`"
+              % "|".join(list(COMMANDS) + ["help"])})
+        return 1
+    try:
+        with session() as s:
+            data = COMMANDS[argv[0]].run(s)
+    except RouterError as e:
+        emit({"error": e.kind, "message": str(e)})
+        return e.exit_code
+    except FormatError as e:
+        emit({"error": "format", "message": str(e)})
+        return 6
+    emit(data)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
