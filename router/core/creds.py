@@ -6,6 +6,7 @@ import configparser
 import os
 
 CONFIG = "router.conf"
+LOCAL_CONFIG = "router.local.conf"  # per machine, gitignored, read after CONFIG
 
 
 def _failure(msg):
@@ -41,6 +42,7 @@ def load(root):
     cfg = configparser.ConfigParser(interpolation=None)
     if not cfg.read(os.path.join(root, CONFIG), encoding="utf-8"):
         raise _failure("config not found: " + CONFIG)
+    cfg.read(os.path.join(root, LOCAL_CONFIG), encoding="utf-8")  # optional
 
     host = cfg.get("router", "host", fallback="").strip()
     source = cfg.get("secrets", "source", fallback="").strip()
@@ -61,7 +63,8 @@ def load(root):
         user = _read(os.path.join(base, "ROUTER_USER"))
         password = _read(os.path.join(base, "ROUTER_PASS"))
     else:
-        raise _failure("unsupported secrets source in %s: %r" % (CONFIG, source))
+        raise _failure("secrets.source must be file or systemd (got %r); set it in %s"
+                       % (source, LOCAL_CONFIG))
 
     missing = [name for name, value in (("router.host", host), ("ROUTER_USER", user),
                                         ("ROUTER_PASS", password)) if not value]

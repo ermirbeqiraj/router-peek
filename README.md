@@ -27,12 +27,11 @@ sudo ln -s "$PWD/router/router" /usr/local/bin/router
 
 ## Configure
 
-`router.conf` sets the router address and where credentials come from:
+`router.conf` (committed) sets the router address and documents the secrets sources, but
+picks none. Each machine picks one in `router.local.conf` next to it (gitignored, read after
+`router.conf` and overriding it):
 
 ```ini
-[router]
-host = 192.168.1.1
-
 [secrets]
 source = file
 path = ~/.config/router-peek/secrets

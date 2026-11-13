@@ -161,9 +161,11 @@ def _exclusive():
 def session():
     """Logged-in Session for the duration of the block; always logs out."""
     os.makedirs(STATE_DIR, exist_ok=True)
-    if os.path.exists(AUTH_FAILED):
-        raise blocked("previous login was rejected; fix credentials, then delete .state/auth-failed")
     with _exclusive():
+        # Checked under the lock: a run that waited on another run's rejected login
+        # must see the latch it wrote, not log in again and burn a second strike.
+        if os.path.exists(AUTH_FAILED):
+            raise blocked("previous login was rejected; fix credentials, then delete .state/auth-failed")
         host, user, password = creds.load(ROOT)
         s = Session(host)
         try:
