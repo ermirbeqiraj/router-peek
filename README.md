@@ -27,28 +27,15 @@ sudo ln -s "$PWD/router/router" /usr/local/bin/router
 
 ## Configure
 
-`router.conf` (committed) sets the router address and documents the secrets sources, but
-picks none. Each machine picks one in `router.local.conf` next to it (gitignored, read after
-`router.conf` and overriding it):
+[router.conf](router.conf) holds the router address and describes the two places the login
+can come from, without choosing one. Each machine chooses in its own `router.local.conf`, a
+gitignored file next to it, by copying one block from [router.conf](router.conf) and removing
+the `#` from its settings.
 
-```ini
-[secrets]
-source = file
-path = ~/.config/router-peek/secrets
-```
-
-The secrets file lives outside the repo:
-
-```bash
-mkdir -p ~/.config/router-peek && chmod 700 ~/.config/router-peek
-install -m 600 /dev/null ~/.config/router-peek/secrets
-${EDITOR:-nano} ~/.config/router-peek/secrets
-```
-
-```
-ROUTER_USER=...
-ROUTER_PASS=...
-```
+A dev machine uses a credentials file kept outside the repo and readable only by you. A
+headless host uses systemd's encrypted credentials, so the login never sits on disk in plain
+text: the unit that runs the tool hands it over, and the tool keeps its lock and auth-failed
+marker in the unit's state folder. Each block in [router.conf](router.conf) says what it needs.
 
 ## Use
 
@@ -85,6 +72,7 @@ Exit code 0 means stdout is the data. Anything else means stdout is
 
 - **A run logs out anyone using the web UI.** The router allows one admin session, and the
   newest login wins.
-- **The router locks out after 3 bad logins.** After one rejected login the tool writes
-  `.state/auth-failed` and refuses to try again. Fix the credentials, then delete that file.
+- **The router locks out after 3 bad logins.** After one rejected login the tool writes an
+  `auth-failed` file in its state folder (`.state/`, or the systemd unit's) and refuses to try
+  again. Fix the credentials, then delete that file.
 - Tested on firmware `AGHDS_1.0.8` only.

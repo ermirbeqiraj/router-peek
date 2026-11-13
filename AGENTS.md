@@ -58,5 +58,3 @@ embed data as JavaScript, as `new Ctor("..", "..")` calls with `\xNN`-escaped st
 
 - **Firmware drift flag.** Pin `SoftwareVersion` plus the build hash on page URLs
   (`?c74d1ab6…`) in `.state/`. On change, still return the data but mark it `firmware_changed`.
-- **Keyring secrets source.** Add `secret-tool` and/or systemd credentials as `source =`
-  options in `creds.py`.

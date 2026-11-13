@@ -1,6 +1,7 @@
-"""Credential lookup, driven by <project>/router.conf. The only place that touches secrets.
+"""Credential lookup, driven by router.conf + router.local.conf. The only place that touches secrets.
 
-New sources (OS keyring, systemd credentials) are added as another branch in load().
+Sources: file (KEY=VALUE file) and systemd (encrypted credentials). New sources are added
+as another branch in load().
 """
 import configparser
 import os
@@ -40,9 +41,12 @@ def _from_file(path):
 def load(root):
     """(host, user, password) according to router.conf."""
     cfg = configparser.ConfigParser(interpolation=None)
-    if not cfg.read(os.path.join(root, CONFIG), encoding="utf-8"):
-        raise _failure("config not found: " + CONFIG)
-    cfg.read(os.path.join(root, LOCAL_CONFIG), encoding="utf-8")  # optional
+    try:
+        if not cfg.read(os.path.join(root, CONFIG), encoding="utf-8"):
+            raise _failure("config not found: " + CONFIG)
+        cfg.read(os.path.join(root, LOCAL_CONFIG), encoding="utf-8")  # optional
+    except configparser.Error as e:  # e.g. both secrets blocks uncommented: duplicate `source`
+        raise _failure("bad config: %s" % e)
 
     host = cfg.get("router", "host", fallback="").strip()
     source = cfg.get("secrets", "source", fallback="").strip()
@@ -52,22 +56,24 @@ def load(root):
             raise _failure("secrets.path not set in " + CONFIG)
         path = os.path.join(root, path)  # relative paths resolve against the project root
         user, password = _from_file(path)
+        names = ("ROUTER_USER", "ROUTER_PASS")
     elif source == "systemd":
-        # The unit sets LoadCredentialEncrypted=ROUTER_USER/ROUTER_PASS; systemd decrypts
-        # each to <dir>/ROUTER_USER, <dir>/ROUTER_PASS (under /run/credentials/<unit>/)
-        # before this process starts. No plaintext secret ever touches the disk.
-        base = cfg.get("secrets", "dir", fallback="").strip()
+        # The unit loads each named credential with LoadCredentialEncrypted=<name>; systemd
+        # decrypts them into a RAM-only folder private to the unit and passes that folder
+        # in $CREDENTIALS_DIRECTORY. No plaintext ever touches the disk.
+        names = (cfg.get("secrets", "user_credential", fallback="").strip() or "router-user",
+                 cfg.get("secrets", "pass_credential", fallback="").strip() or "router-pass")
+        base = os.environ.get("CREDENTIALS_DIRECTORY", "")
         if not base:
-            raise _failure("secrets.dir not set in " + CONFIG)
-        base = os.path.join(root, base)  # relative paths resolve against the project root
-        user = _read(os.path.join(base, "ROUTER_USER"))
-        password = _read(os.path.join(base, "ROUTER_PASS"))
+            raise _failure("source = systemd but $CREDENTIALS_DIRECTORY is not set: run under a "
+                           "unit with LoadCredentialEncrypted=%s and %s" % names)
+        user, password = (_read(os.path.join(base, name)) for name in names)
     else:
         raise _failure("secrets.source must be file or systemd (got %r); set it in %s"
                        % (source, LOCAL_CONFIG))
 
-    missing = [name for name, value in (("router.host", host), ("ROUTER_USER", user),
-                                        ("ROUTER_PASS", password)) if not value]
+    missing = [name for name, value in (("router.host", host), (names[0], user),
+                                        (names[1], password)) if not value]
     if missing:
         raise _failure("missing: " + ", ".join(missing))
     return host, user, password
