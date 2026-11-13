@@ -20,7 +20,8 @@ This file covers how the code works and how to extend it.
 ## Layout
 
 ```
-router.conf              host + secrets source (no secrets)
+router.conf              host; documents secrets sources, picks none (committed)
+router.local.conf        this machine's secrets source (gitignored, overrides router.conf)
 router/router            entry: dispatch, help, exit codes
 router/core/client.py    session: auth, GET-only page access (cached per run), lock, lockout latch
 router/core/jsparse.py   records(page, ctor, FIELDS, min_count), var(page, name)
