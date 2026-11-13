@@ -16,7 +16,10 @@ from contextlib import contextmanager
 from core import creds
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-STATE_DIR = os.path.join(ROOT, ".state")
+# Lock and auth-failed latch. Under systemd (StateDirectory=) the install dir is read-only,
+# so use the dir systemd provides; otherwise <project>/.state.
+STATE_DIR = (os.environ.get("STATE_DIRECTORY", "").split(":")[0]
+             or os.path.join(ROOT, ".state"))
 AUTH_FAILED = os.path.join(STATE_DIR, "auth-failed")
 LOCK_FILE = os.path.join(STATE_DIR, "lock")
 TIMEOUT = 10
